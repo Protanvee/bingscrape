@@ -45,3 +45,5 @@ def handler(event, context):
         }
     else:
         return {"statusCode": 404, "body": "Not Found"}
+
+__vc_handler = handler #This is the important line.
