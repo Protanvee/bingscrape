@@ -1,39 +1,48 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from playwright.sync_api import sync_playwright
-from typing import Dict, List
 
 app = FastAPI()
 
-def fetch_bing_results(query: str) -> List[Dict]:
-    search_url = f"https://www.bing.com/search?q=site%3Alinkedin.com+%22{query}%22+(%22Producer%22+OR+%22Distributor%22)"
-
+@app.get("/search/{company}")
+def search(company: str):
+    search_url = f"https://www.bing.com/search?q=site%3Alinkedin.com+{company}+(Producer+OR+Distributor)"
+    
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto(search_url, timeout=60000)
+
+        # Set a custom User-Agent to bypass Bing blocks
+        page.set_extra_http_headers({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+        })
+
+        # Go to Bing search page
+        try:
+            page.goto(search_url, timeout=60000)
+        except:
+            browser.close()
+            raise HTTPException(status_code=500, detail="Failed to load Bing search page")
 
         results = []
-        items = page.query_selector_all("#b_results .b_algo")
+        search_results = page.query_selector_all("ol#b_results li.b_algo")
 
-        for item in items:
-            title_element = item.query_selector("h2 a")
-            desc_element = item.query_selector("p")
+        if not search_results:
+            browser.close()
+            raise HTTPException(status_code=404, detail="No results found")
 
-            if title_element:
-                results.append({
-                    "title": title_element.inner_text(),
-                    "description": desc_element.inner_text() if desc_element else "",
-                    "url": title_element.get_attribute("href")
-                })
+        for result in search_results:
+            title_element = result.query_selector("h2 a")
+            description_element = result.query_selector("p")
+
+            title = title_element.inner_text() if title_element else "No title"
+            link = title_element.get_attribute("href") if title_element else "No link"
+            description = description_element.inner_text() if description_element else "No description"
+
+            results.append({
+                "title": title,
+                "link": link,
+                "description": description
+            })
 
         browser.close()
-    return results
-
-@app.get("/")
-def home():
-    return {"message": "Use /search/{company_name} to fetch Bing results."}
-
-@app.get("/search/{company_name}")
-def search(company_name: str):
-    results = fetch_bing_results(company_name)
-    return {"company": company_name, "results": results}
+        return {"results": results}
