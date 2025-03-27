@@ -3,6 +3,10 @@ from playwright.sync_api import sync_playwright
 
 app = FastAPI()
 
+@app.get("/")
+def home():
+    return {"message": "Bing Scraper API is running!"}
+
 @app.get("/search/{company}")
 def search(company: str):
     search_url = f"https://www.bing.com/search?q=site%3Alinkedin.com+{company}+(Producer+OR+Distributor)"
@@ -16,7 +20,6 @@ def search(company: str):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
         })
 
-        # Go to Bing search page
         try:
             page.goto(search_url, timeout=60000)
         except:
