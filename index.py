@@ -1,49 +1,53 @@
-# index.py
+from flask import Flask, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 import json
-from urllib.parse import quote_plus
+import os
 
+app = Flask(__name__)
+
+@app.route('/<company_name>')
 def get_bing_results(company_name):
-    """Fetches Bing search results and extracts relevant data."""
+    """
+    Fetches Bing search results for a given company name and returns them as JSON.
+    """
+    search_query = f'site:linkedin.com "{company_name}" ("Producer" OR "Distributor")'
+    bing_url = f'https://www.bing.com/search?q={search_query.replace(" ", "+")}'
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+
     try:
-        query = f'site:linkedin.com "{company_name}" ("Producer" OR "Distributor")'
-        url = f"https://www.bing.com/search?pglt=299&q={quote_plus(query)}"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        response = requests.get(url, headers=headers)
+        response = requests.get(bing_url, headers=headers)
         response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-        soup = BeautifulSoup(response.content, "html.parser")
-        results = []
-        for item in soup.select("#b_results > li.b_algo"):
-            title_element = item.select_one("h2 a")
-            description_element = item.select_one("p.b_lineclamp2")
-            link_element = item.select_one("h2 a")
-            if title_element and description_element and link_element:
-                title = title_element.text.strip()
-                description = description_element.text.strip()
-                link = link_element["href"]
-                results.append({"title": title, "description": description, "link": link})
+        soup = BeautifulSoup(response.content, 'html.parser')
+        results_list = soup.find('ol', {'id': 'b_results'})
 
-        return results
+        if results_list:
+            results_data = []
+            for item in results_list.find_all('li', {'class': 'b_algo'}):
+                title_element = item.find('a', {'class': 'tilk'})
+                desc_element = item.find('p', {'class': 'b_lineclamp2'})
+                link_element = title_element['href'] if title_element and 'href' in title_element.attrs else None
+                title = title_element.get_text() if title_element else None
+                description = desc_element.get_text() if desc_element else None
+
+                results_data.append({
+                    'title': title,
+                    'description': description,
+                    'link': link_element
+                })
+            return jsonify(results_data)
+        else:
+            return jsonify({"error": "No search results found."})
+
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {e}"}
+        return jsonify({"error": f"Error fetching Bing search results: {e}"})
     except Exception as e:
-        return {"error": f"An unexpected error occurred: {e}"}
+        return jsonify({"error": f"An unexpected error occurred: {e}"})
 
-def handler(event, context):
-    """Vercel handler function."""
-    path = event["path"]
-    if path.startswith("/"):
-        company_name = path[1:]
-        results = get_bing_results(company_name)
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(results),
-        }
-    else:
-        return {"statusCode": 404, "body": "Not Found"}
-
-__vc_handler = handler #This is the important line.
+if __name__ == '__main__':
+    # This part is for local testing and will not be executed on Vercel
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)
