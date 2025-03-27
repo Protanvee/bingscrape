@@ -28,7 +28,14 @@ def get_bing_results(company_name):
             results_data = []
             for item in results_list.find_all('li', {'class': 'b_algo'}):
                 title_element = item.find('a', {'class': 'tilk'})
+                # Try to find description with either class
                 desc_element = item.find('p', {'class': 'b_lineclamp2'})
+                if not desc_element:
+                    desc_element = item.find('p', {'class': 'b_lineclamp3'})
+                # If still not found, try to find the first <p> tag within the b_algo div
+                if not desc_element:
+                    desc_element = item.find('div', {'class': 'b_imgcap_altitle'}).find_next('p') if item.find('div', {'class': 'b_imgcap_altitle'}) else None
+
                 link_element = title_element['href'] if title_element and 'href' in title_element.attrs else None
                 title = title_element.get_text() if title_element else None
                 description = desc_element.get_text() if desc_element else None
