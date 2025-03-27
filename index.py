@@ -1,37 +1,36 @@
-from fastapi import FastAPI, HTTPException
-from playwright.sync_api import sync_playwright
+from flask import Flask, jsonify
+import requests
 
-app = FastAPI()
+app = Flask(__name__)
 
-@app.get("/")
-def home():
-    return {"message": "Bing Scraper API is running!"}
+@app.route('/<company_name>', methods=['GET'])
+def get_bing_search_results(company_name):
+    # Construct the Bing search URL
+    bing_search_url = f"https://www.bing.com/search?pglt=299&q=site%3A+linkedin.com%20%22{company_name}%22%20(%22Producer%22%20OR%20%22Distributor%22)"
 
-@app.get("/search/{company}")
-def search(company: str):
-    search_url = f"https://www.bing.com/search?q=site%3Alinkedin.com+{company}+(Producer+OR+Distributor)"
-    
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(search_url, timeout=60000)
+    # Make the API request to Bing
+    response = requests.get(bing_search_url)
 
-        results = []
-        search_results = page.query_selector_all("ol#b_results li.b_algo")
+    # Parse the HTML response and extract the relevant information
+    html_content = response.text
+    start_index = html_content.find('<ol id="b_results" class="">')
+    end_index = html_content.find('</ol>') + len('</ol>')
+    search_results_html = html_content[start_index:end_index]
 
-        if not search_results:
-            browser.close()
-            raise HTTPException(status_code=404, detail="No results found")
+    # Extract the title, description, and summary excerpt from the search results
+    search_results = []
+    for result in search_results_html.split('<li class="b_algo"'):
+        if 'b_tpcn' in result:
+            title = result.split('<div class="tptt">')[1].split('</div>')[0]
+            description = result.split('<p class="b_lineclamp2">')[1].split('</p>')[0]
+            summary_excerpt = description.split(' ... ')[0]
+            search_results.append({
+                'title': title,
+                'description': description,
+                'summary_excerpt': summary_excerpt
+            })
 
-        for result in search_results:
-            title_element = result.query_selector("h2 a")
-            description_element = result.query_selector("p")
+    return jsonify(search_results)
 
-            title = title_element.inner_text() if title_element else "No title"
-            link = title_element.get_attribute("href") if title_element else "No link"
-            description = description_element.inner_text() if description_element else "No description"
-
-            results.append({"title": title, "link": link, "description": description})
-
-        browser.close()
-        return {"results": results}
+if __name__ == '__main__':
+    app.run()
