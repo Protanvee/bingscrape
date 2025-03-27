@@ -8,6 +8,7 @@
     }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "index.py" }
+    { "src": "/(.*)", "dest": "index.py" },
+    { "src": "/search/(.*)", "dest": "index.py" }
   ]
 }
