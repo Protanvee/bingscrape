@@ -21,6 +21,11 @@ def get_bing_results(company_name):
     try:
         response = requests.get(bing_url, headers=headers)
         response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+
+        # Print the HTML content to the logs for debugging
+        print("Fetched HTML Content:")
+        print(response.text)
+
         soup = BeautifulSoup(response.content, 'html.parser')
         results_list = soup.find('ol', {'id': 'b_results'})
 
@@ -28,11 +33,9 @@ def get_bing_results(company_name):
             results_data = []
             for item in results_list.find_all('li', {'class': 'b_algo'}):
                 title_element = item.find('a', {'class': 'tilk'})
-                # Try to find description with either class
                 desc_element = item.find('p', {'class': 'b_lineclamp2'})
                 if not desc_element:
                     desc_element = item.find('p', {'class': 'b_lineclamp3'})
-                # If still not found, try to find the first <p> tag within the b_algo div
                 if not desc_element:
                     desc_element = item.find('div', {'class': 'b_imgcap_altitle'}).find_next('p') if item.find('div', {'class': 'b_imgcap_altitle'}) else None
 
@@ -55,6 +58,5 @@ def get_bing_results(company_name):
         return jsonify({"error": f"An unexpected error occurred: {e}"})
 
 if __name__ == '__main__':
-    # This part is for local testing and will not be executed on Vercel
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=True, host='0.0.0.0', port=port)
